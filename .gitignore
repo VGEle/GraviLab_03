@@ -1,0 +1,35 @@
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Configuración local y secretos
+.env
+.env.*
+.streamlit/secrets.toml
+
+# Archivos del sistema operativo y del editor
+.DS_Store
+.AppleDouble
+.LSOverride
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Videos de prueba y resultados generados
+*.mp4
+*.mov
+*.avi
+*.m4v
+outputs/
+resultados/
+

@@ -4,7 +4,13 @@ import cv2
 import numpy as np
 import pandas as pd
 
-from analisis import calcular_periodo_trayectoria, calibrar_escala_m_por_pixel
+from analisis import (
+    calcular_analisis,
+    calcular_periodo_trayectoria,
+    calibrar_escala_m_por_pixel,
+    detectar_datos_atipicos,
+    generar_conclusiones,
+)
 from seguimiento import _perfil_color
 
 
@@ -65,6 +71,46 @@ class SeguimientoColorTests(unittest.TestCase):
         self.assertLess(min(tono, 180 - tono), 5)
         self.assertGreaterEqual(saturacion, 240)
         self.assertGreaterEqual(valor, 240)
+
+
+class AnalisisFisicoTests(unittest.TestCase):
+    def _mediciones(self):
+        return [
+            {"longitud_m": longitud, "tiempo_10_oscilaciones_s": tiempo, "repeticion": repeticion}
+            for longitud, tiempos in {
+                0.20: [8.98, 9.02, 9.00],
+                0.30: [11.00, 11.04, 11.02],
+                0.40: [12.70, 12.74, 12.72],
+                0.50: [14.20, 14.24, 14.22],
+                0.60: [15.55, 15.59, 15.57],
+                0.80: [17.95, 17.99, 17.97],
+            }.items()
+            for repeticion, tiempo in enumerate(tiempos, start=1)
+        ]
+
+    def test_detecta_un_periodo_atipico_por_longitud(self):
+        mediciones = self._mediciones()
+        mediciones.extend(
+            [
+                {"longitud_m": 0.20, "tiempo_10_oscilaciones_s": 15.0, "repeticion": 4},
+            ]
+        )
+
+        atipicos = detectar_datos_atipicos(mediciones)
+
+        fila = atipicos[
+            (atipicos["longitud_m"] == 0.20) & (atipicos["repeticion"] == 4)
+        ].iloc[0]
+        self.assertTrue(fila["atipico"])
+
+    def test_genera_conclusiones_con_resultados_del_ajuste(self):
+        resumen, parametros = calcular_analisis(self._mediciones())
+
+        conclusiones = generar_conclusiones(resumen, parametros)
+
+        self.assertGreaterEqual(len(conclusiones), 3)
+        self.assertTrue(any("R²" in conclusion for conclusion in conclusiones))
+        self.assertTrue(any("gravedad experimental" in conclusion for conclusion in conclusiones))
 
 
 if __name__ == "__main__":

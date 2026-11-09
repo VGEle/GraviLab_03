@@ -16,9 +16,12 @@ import streamlit as st
 from PIL import Image
 
 from analisis import (
+    GRAVEDAD_REFERENCIA_M_S2,
     calcular_analisis,
     calcular_periodo_trayectoria,
     calibrar_escala_m_por_pixel,
+    detectar_datos_atipicos,
+    generar_conclusiones,
 )
 from seguimiento import procesar_video
 
@@ -171,12 +174,22 @@ if mediciones:
             "para habilitar el análisis."
         )
     else:
-        resumen, parametros = calcular_analisis(mediciones)
+        gravedad_referencia = st.number_input(
+            "Gravedad de referencia (m/s²)",
+            min_value=9.0,
+            max_value=10.0,
+            value=GRAVEDAD_REFERENCIA_M_S2,
+            step=0.01,
+            format="%.2f",
+            help="Se propone 9,78 m/s² como referencia local para Medellín.",
+        )
+        resumen, parametros = calcular_analisis(mediciones, gravedad_referencia)
+        datos_atipicos = detectar_datos_atipicos(mediciones)
         st.caption(
             "El periodo de cada repetición es el tiempo de 10 oscilaciones dividido entre 10. "
             "Se ajusta T² promedio frente a la longitud; la incertidumbre reportada es "
             "el error estándar de g propagado desde el error estándar de la pendiente. "
-            "El error porcentual usa g de referencia = 9,81 m/s²."
+            "El error porcentual usa la gravedad de referencia seleccionada."
         )
         st.dataframe(
             resumen.rename(
@@ -227,6 +240,63 @@ if mediciones:
         eje_analisis.grid(alpha=0.25)
         eje_analisis.legend()
         st.pyplot(figura_analisis, clear_figure=True)
+
+        st.subheader("Periodo frente a la longitud")
+        figura_periodo, eje_periodo = plt.subplots(figsize=(8, 4))
+        desviaciones = resumen["desviacion_estandar_s"].fillna(0)
+        eje_periodo.errorbar(
+            resumen["longitud_m"],
+            resumen["periodo_promedio_s"],
+            yerr=desviaciones,
+            fmt="o",
+            capsize=4,
+            color="#1769aa",
+            label="Mediciones experimentales",
+        )
+        longitudes_teoricas = np.linspace(
+            resumen["longitud_m"].min(), resumen["longitud_m"].max(), 200
+        )
+        gravedad_modelo = parametros.get("gravedad", gravedad_referencia)
+        if not math.isfinite(gravedad_modelo) or gravedad_modelo <= 0:
+            gravedad_modelo = gravedad_referencia
+        periodos_teoricos = 2 * math.pi * np.sqrt(longitudes_teoricas / gravedad_modelo)
+        eje_periodo.plot(
+            longitudes_teoricas,
+            periodos_teoricos,
+            color="#d1495b",
+            label=f"Modelo T = 2π√(L/g), g = {gravedad_modelo:.2f} m/s²",
+        )
+        eje_periodo.set_xlabel("Longitud L (m)")
+        eje_periodo.set_ylabel("Periodo T (s)")
+        eje_periodo.grid(alpha=0.25)
+        eje_periodo.legend()
+        st.pyplot(figura_periodo, clear_figure=True)
+
+        st.subheader("Control de datos atípicos")
+        filas_atipicas = datos_atipicos[datos_atipicos["atipico"]]
+        if filas_atipicas.empty:
+            st.success("No se detectaron mediciones atípicas mediante el criterio IQR por longitud.")
+        else:
+            st.warning(
+                f"Se detectaron {len(filas_atipicas)} medición(es) atípica(s). Revisa estos valores antes de excluirlos."
+            )
+            st.dataframe(
+                filas_atipicas.rename(
+                    columns={
+                        "longitud_m": "Longitud (m)",
+                        "repeticion": "Repetición",
+                        "periodo_s": "Periodo (s)",
+                        "limite_inferior_s": "Límite inferior (s)",
+                        "limite_superior_s": "Límite superior (s)",
+                    }
+                ).round(6),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+        st.subheader("Conclusiones automáticas")
+        for conclusion in generar_conclusiones(resumen, parametros, datos_atipicos):
+            st.markdown(f"- {conclusion}")
 
 video_cargado = st.file_uploader(
     "Carga un video del péndulo",

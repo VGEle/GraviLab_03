@@ -6,7 +6,10 @@ Actualmente la aplicación:
 
 - Registra longitudes y tiempos de 10 oscilaciones con sus repeticiones, valida las entradas y exporta las mediciones a CSV.
 - Calcula el periodo por repetición, su promedio y desviación estándar por longitud, y ajusta una regresión lineal de T² frente a L.
-- Calcula la gravedad, su incertidumbre propagada desde el error estándar de la pendiente y el error porcentual respecto a 9,81 m/s².
+- Calcula la gravedad, su incertidumbre propagada desde el error estándar de la pendiente y el error porcentual respecto a una gravedad de referencia configurable.
+- Genera las gráficas T² frente a L y T frente a L, incluyendo la recta de ajuste, el modelo teórico y barras de error.
+- Detecta mediciones atípicas por longitud mediante el criterio del rango intercuartílico (IQR).
+- Redacta conclusiones automáticas sobre R², la gravedad experimental, el error porcentual, el intercepto y los datos atípicos.
 - Carga videos del experimento.
 - Muestra el primer fotograma en tamaño reducido.
 - Permite seleccionar la lenteja haciendo clic sobre ella.
@@ -53,6 +56,7 @@ En Windows, la activación del entorno virtual se realiza con:
 6. Consulta las mediciones registradas en la tabla o pulsa **Borrar todas las mediciones** para empezar de nuevo. Los datos se mantienen durante la sesión actual de la aplicación.
 7. Pulsa **Descargar mediciones CSV** para exportar las columnas `longitud_m`, `tiempo_10_oscilaciones_s` y `repeticion`. Longitudes y tiempos se normalizan a metros y segundos.
 8. Cuando haya al menos 6 longitudes distintas y 3 repeticiones por longitud, consulta **Análisis físico** para ver el periodo promedio, la desviación estándar, T², la regresión, g y el error porcentual. El ajuste usa el periodo promedio de cada longitud y reporta la incertidumbre estándar de g propagada desde la incertidumbre estándar de la pendiente.
+9. Revisa las gráficas T² frente a L y T frente a L, las alertas de mediciones atípicas y las conclusiones automáticas. La gravedad de referencia inicia en 9,78 m/s², pero puede cambiarse desde la interfaz si el laboratorio define otro valor.
 
 ### Análisis de video
 
@@ -78,9 +82,9 @@ En Windows, la activación del entorno virtual se realiza con:
 
 ```text
 app.py             Interfaz web de Streamlit.
-analisis.py        Estadística de periodos, regresión lineal y cálculo de g.
+    analisis.py        Estadística de periodos, regresión lineal, cálculo de g y conclusiones.
 seguimiento.py     Detección de color y seguimiento de la lenteja.
-test_analisis.py   Pruebas de calibración, periodo automático y perfil de color.
+    test_analisis.py   Pruebas de análisis físico, datos atípicos, calibración y periodo automático.
 requirements.txt   Dependencias del proyecto.
 ```
 
@@ -89,6 +93,7 @@ requirements.txt   Dependencias del proyecto.
 - La lenteja debe tener suficiente contraste con el fondo.
 - La selección inicial se realiza manualmente.
 - La calibración espacial es opcional, requiere dos puntos visibles de una distancia conocida y no corrige distorsión ni perspectiva.
+- El criterio IQR marca valores para revisión, pero no los elimina automáticamente del análisis.
 - La detección automática del periodo usa cruces ascendentes del eje de mayor movimiento; requiere que el video incluya al menos una oscilación completa y que la pelotilla se detecte con continuidad.
 - El cálculo de g se basa en los tiempos registrados manualmente; no se extrae el periodo del video.
 - Si el sistema no dispone de un códec MP4 compatible, el resultado puede generarse en formato AVI.

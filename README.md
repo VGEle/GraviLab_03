@@ -12,8 +12,8 @@ Actualmente la aplicación:
 - Redacta conclusiones automáticas sobre R², la gravedad experimental, el error porcentual, el intercepto y los datos atípicos.
 - Carga videos del experimento.
 - Muestra el primer fotograma en tamaño reducido.
-- Permite seleccionar la lenteja haciendo clic sobre ella.
-- Sigue la lenteja usando su color y una predicción de posición entre fotogramas, rechazando saltos improbables.
+- Permite seleccionar la pelotilla haciendo clic sobre ella y corregir la coordenada con un ajuste fino opcional.
+- Sigue la pelotilla usando su color y una predicción de posición entre fotogramas, rechazando saltos improbables.
 - Dibuja la trayectoria sobre el video.
 - Estima automáticamente el periodo mediante cruces ascendentes de la posición de equilibrio.
 - Calibra píxeles a metros con dos puntos de una regla o una longitud conocida.
@@ -24,7 +24,7 @@ Actualmente la aplicación:
 
 - Python 3.10 o superior.
 - Un video del péndulo en formato `.mp4`, `.mov`, `.avi` o `.m4v`.
-- Cámara fija, buena iluminación y una lenteja que contraste con el fondo.
+- Cámara fija, buena iluminación y una pelotilla que contraste con el fondo.
 
 ## Ejecución local
 
@@ -61,18 +61,18 @@ En Windows, la activación del entorno virtual se realiza con:
 ### Análisis de video
 
 1. Carga el video en **Carga un video del péndulo**.
-2. Opcionalmente, abre **Calibración espacial**. Haz clic en cada extremo de una regla o referencia visible, guarda cada punto e ingresa la distancia real y su unidad.
-3. Haz clic sobre el centro de la lenteja en la imagen reducida.
-4. Ajusta el radio de muestra y la tolerancia de color si es necesario.
-5. Pulsa **Seguir lenteja**.
+2. Opcionalmente, abre **Calibración espacial**. Haz clic en cada extremo de una regla o referencia visible, confirma cada punto e ingresa la distancia real. Esto convierte píxeles a metros; no es necesario para seguir la pelotilla ni para calcular el periodo.
+3. Haz clic sobre el centro de la pelotilla en la imagen reducida. Si hace falta, usa **Ajuste fino de la selección** para corregir X e Y.
+4. Ajusta el tamaño de la zona de color y la tolerancia si es necesario.
+5. Pulsa **Seguir pelotilla**.
 6. Revisa el porcentaje de fotogramas detectados y el periodo estimado automáticamente a partir de cruces ascendentes. Se muestra también la dispersión del periodo cuando hay suficientes ciclos.
 7. Descarga el video anotado o los datos de trayectoria. Si calibraste, el CSV incluye las posiciones relativas `x_m` y `y_m`.
 
 ## Recomendaciones para grabar el video
 
 - Usa una cámara fija y perpendicular al plano de oscilación.
-- Mantén la lenteja visible durante todo el video.
-- Utiliza un fondo uniforme y una lenteja de color contrastante.
+- Mantén la pelotilla visible durante todo el video.
+- Utiliza un fondo uniforme y una pelotilla de color contrastante.
 - Evita sombras, reflejos y objetos con colores similares.
 - Graba al menos 10 oscilaciones, preferiblemente a 30 FPS o más.
 - Incluye una regla o marcador de longitud conocida en el mismo plano de movimiento para calibrar píxeles a metros.
@@ -90,7 +90,7 @@ requirements.txt   Dependencias del proyecto.
 
 ## Limitaciones actuales
 
-- La lenteja debe tener suficiente contraste con el fondo.
+- La pelotilla debe tener suficiente contraste con el fondo.
 - La selección inicial se realiza manualmente.
 - La calibración espacial es opcional, requiere dos puntos visibles de una distancia conocida y no corrige distorsión ni perspectiva.
 - El criterio IQR marca valores para revisión, pero no los elimina automáticamente del análisis.

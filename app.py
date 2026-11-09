@@ -33,17 +33,30 @@ except ImportError:
     COMPONENTE_CLIC = False
 
 
-st.set_page_config(page_title="GraviLab - Seguimiento de video", layout="wide")
+st.set_page_config(page_title="GraviLab - Análisis del péndulo", layout="wide")
 
-st.title("GraviLab: seguimiento del péndulo")
-st.write("Carga un video y haz clic directamente sobre la lenteja para iniciar el seguimiento.")
-
-st.subheader("Registro de mediciones")
+st.title("GraviLab: análisis del péndulo")
 st.write(
-    "Registra la longitud del péndulo y el tiempo de 10 oscilaciones para cada "
-    "repetición. Para completar la serie se requieren al menos 6 longitudes y "
-    "entre 3 y 5 repeticiones por longitud."
+    "Puedes analizar el experimento de dos formas: registra manualmente los tiempos "
+    "para calcular g, o carga un video para seguir la pelotilla y estimar su periodo."
 )
+
+st.subheader("Registro manual de mediciones")
+st.write(
+    "Esta sección se usa para el análisis físico de la práctica. En cada fila se "
+    "registra una longitud y el tiempo total de 10 oscilaciones. La aplicación "
+    "divide ese tiempo entre 10, calcula promedios y obtiene g a partir de T² frente a L."
+)
+with st.expander("¿Qué debo medir y qué datos debo ingresar?"):
+    st.markdown(
+        "1. Mide la longitud desde el punto de suspensión hasta el centro de la pelotilla.\n"
+        "2. Para esa longitud, mide con cronómetro el tiempo de **10 oscilaciones completas**.\n"
+        "3. Repite la medición 3, 4 o 5 veces y cambia el número de repetición.\n"
+        "4. Repite todo con al menos 6 longitudes diferentes.\n\n"
+        "El registro manual y el análisis de video son complementarios: el registro "
+        "manual alimenta el cálculo de la gravedad, mientras el video permite revisar "
+        "la trayectoria y estimar un periodo automáticamente."
+    )
 
 if "mediciones_registradas" not in st.session_state:
     st.session_state.mediciones_registradas = []
@@ -52,10 +65,10 @@ with st.form("form_registro_datos"):
     columna_longitud, columna_tiempo, columna_repeticion = st.columns(3)
     with columna_longitud:
         longitud_ingresada = st.text_input("Longitud")
-        unidad_longitud = st.selectbox("Unidad de longitud", ["", "m", "cm", "mm"])
+        unidad_longitud = st.selectbox("Unidad de longitud", ["cm", "m", "mm"])
     with columna_tiempo:
         tiempo_ingresado = st.text_input("Tiempo de 10 oscilaciones")
-        unidad_tiempo = st.selectbox("Unidad de tiempo", ["", "s"])
+        unidad_tiempo = st.selectbox("Unidad de tiempo", ["s"])
     with columna_repeticion:
         repeticion_ingresada = st.text_input("Número de repetición")
     guardar_medicion = st.form_submit_button("Agregar medición", type="primary")
@@ -301,7 +314,7 @@ if mediciones:
 video_cargado = st.file_uploader(
     "Carga un video del péndulo",
     type=["mp4", "mov", "avi", "m4v"],
-    help="Usa una cámara fija y una lenteja que contraste con el fondo.",
+    help="Usa una cámara fija y una pelotilla que contraste con el fondo.",
 )
 
 if video_cargado is None:
@@ -345,8 +358,15 @@ alto_vista = max(1, int(alto * escala))
 st.subheader("Calibración espacial")
 with st.expander("Calibrar píxeles a metros con una regla o longitud conocida"):
     st.caption(
-        "Selecciona los dos extremos de una distancia visible en el mismo plano del péndulo "
-        "e ingresa su longitud real. La calibración supone que la cámara es perpendicular al plano."
+        "La calibración es opcional. Solo necesitas hacerla si quieres convertir posiciones "
+        "de píxeles a metros. Usa una regla visible en el mismo plano del péndulo: haz clic "
+        "en sus dos extremos, confirma cada punto e ingresa la distancia real."
+    )
+    st.info(
+        "Los píxeles son coordenadas de la imagen, no una medición física. Por ejemplo, "
+        "si una regla de 30 cm ocupa 150 píxeles, la aplicación calcula 0,002 m/px. "
+        "La calibración no es necesaria para seguir la pelotilla ni para calcular el "
+        "periodo; solo permite mostrar la posición en metros."
     )
     if COMPONENTE_CLIC:
         vista_calibracion = cv2.resize(
@@ -373,8 +393,14 @@ with st.expander("Calibrar píxeles a metros con una regla o longitud conocida")
                 min(ancho - 1, max(0, round(clic_calibracion["x"] / escala))),
                 min(alto - 1, max(0, round(clic_calibracion["y"] / escala))),
             )
+        punto_seleccionado = st.session_state.get("clic_calibracion")
         st.caption(
-            f"Punto seleccionado: {st.session_state.get('clic_calibracion', 'haz clic en un extremo')}"
+            "Punto seleccionado: "
+            + (
+                f"X = {punto_seleccionado[0]} px, Y = {punto_seleccionado[1]} px"
+                if punto_seleccionado
+                else "haz clic sobre un extremo"
+            )
         )
     else:
         st.image(
@@ -401,12 +427,12 @@ with st.expander("Calibrar píxeles a metros con una regla o longitud conocida")
 
     if COMPONENTE_CLIC:
         columna_extremo_1, columna_extremo_2, columna_reiniciar = st.columns(3)
-        if columna_extremo_1.button("Guardar extremo 1", key="guardar_extremo_1"):
+        if columna_extremo_1.button("Confirmar extremo 1", key="guardar_extremo_1"):
             if "clic_calibracion" in st.session_state:
                 st.session_state.punto_calibracion_1 = st.session_state.clic_calibracion
             else:
                 st.error("Haz clic en el primer extremo de la referencia.")
-        if columna_extremo_2.button("Guardar extremo 2", key="guardar_extremo_2"):
+        if columna_extremo_2.button("Confirmar extremo 2", key="guardar_extremo_2"):
             if "clic_calibracion" in st.session_state:
                 st.session_state.punto_calibracion_2 = st.session_state.clic_calibracion
             else:
@@ -418,34 +444,57 @@ with st.expander("Calibrar píxeles a metros con una regla o longitud conocida")
     columna_longitud_real, columna_unidad_real = st.columns(2)
     with columna_longitud_real:
         longitud_referencia_ingresada = st.text_input(
-            "Longitud real entre los extremos", value="1.0", key="longitud_referencia"
+            "Distancia real entre los extremos",
+            value="",
+            placeholder="Ejemplo: 30",
+            key="longitud_referencia",
         )
     with columna_unidad_real:
         unidad_referencia = st.selectbox(
-            "Unidad de referencia", ["m", "cm", "mm"], key="unidad_referencia"
+            "Unidad de referencia", ["cm", "m", "mm"], index=0, key="unidad_referencia"
         )
 
     escala_m_por_px: float | None = None
-    try:
-        longitud_referencia = float(longitud_referencia_ingresada.strip().replace(",", "."))
-        factor_unidad = {"m": 1.0, "cm": 0.01, "mm": 0.001}[unidad_referencia]
-        longitud_referencia_m = longitud_referencia * factor_unidad
-        if not math.isfinite(longitud_referencia_m) or longitud_referencia_m <= 0:
-            raise ValueError("La longitud de referencia debe ser mayor que cero.")
-        if "punto_calibracion_1" in st.session_state and "punto_calibracion_2" in st.session_state:
-            escala_m_por_px = calibrar_escala_m_por_pixel(
-                st.session_state.punto_calibracion_1,
-                st.session_state.punto_calibracion_2,
-                longitud_referencia_m,
-            )
-            st.success(f"Escala: {escala_m_por_px:.6g} m/px")
-    except ValueError as error:
-        st.error(str(error))
+    if longitud_referencia_ingresada.strip():
+        try:
+            longitud_referencia = float(longitud_referencia_ingresada.strip().replace(",", "."))
+            factor_unidad = {"m": 1.0, "cm": 0.01, "mm": 0.001}[unidad_referencia]
+            longitud_referencia_m = longitud_referencia * factor_unidad
+            if not math.isfinite(longitud_referencia_m) or longitud_referencia_m <= 0:
+                raise ValueError("La distancia de referencia debe ser mayor que cero.")
+            if "punto_calibracion_1" in st.session_state and "punto_calibracion_2" in st.session_state:
+                escala_m_por_px = calibrar_escala_m_por_pixel(
+                    st.session_state.punto_calibracion_1,
+                    st.session_state.punto_calibracion_2,
+                    longitud_referencia_m,
+                )
+                st.success(f"Escala calculada: {escala_m_por_px:.6g} m/px")
+            else:
+                st.caption("Confirma los dos extremos para calcular la escala.")
+        except ValueError as error:
+            st.error(str(error))
 
-st.subheader("Selecciona la lenteja")
+st.subheader("Selecciona la pelotilla")
+st.caption(
+    "Haz clic una vez sobre el centro de la pelotilla, no sobre el hilo. "
+    "La cruz amarilla indica la selección actual. Si el clic no queda exacto, "
+    "puedes corregir las coordenadas en el ajuste fino."
+)
 
-radio_muestra = st.slider("Radio de muestra (px)", 4, 50, 12)
-tolerancia_tono = st.slider("Tolerancia de color", 5, 45, 18)
+radio_muestra = st.slider(
+    "Tamaño de la zona de color alrededor de la pelotilla (px)",
+    4,
+    50,
+    12,
+    help="Incluye el centro y una pequeña zona de la pelotilla, pero evita incluir el fondo.",
+)
+tolerancia_tono = st.slider(
+    "Tolerancia de color",
+    5,
+    45,
+    18,
+    help="Auméntala si la pelotilla cambia de tono por iluminación; redúcela si detecta el fondo.",
+)
 
 vista_seleccion = cv2.resize(primer_frame, (ancho_vista, alto_vista), interpolation=cv2.INTER_AREA)
 x_vista = int(st.session_state.lenteja_x * escala)
@@ -455,26 +504,51 @@ cv2.drawMarker(vista_seleccion, (x_vista, y_vista), (0, 255, 255), cv2.MARKER_CR
 vista_rgb = cv2.cvtColor(vista_seleccion, cv2.COLOR_BGR2RGB)
 
 if COMPONENTE_CLIC:
-    st.caption("Haz clic sobre el centro de la lenteja. La cruz amarilla muestra la selección actual.")
     clic = streamlit_image_coordinates(
         Image.fromarray(vista_rgb),
         key=f"selector_lenteja_{identificador_video}",
     )
     if clic is not None:
-        st.session_state.lenteja_x = min(ancho - 1, max(0, round(clic["x"] / escala)))
-        st.session_state.lenteja_y = min(alto - 1, max(0, round(clic["y"] / escala)))
+        nueva_x = min(ancho - 1, max(0, round(clic["x"] / escala)))
+        nueva_y = min(alto - 1, max(0, round(clic["y"] / escala)))
+        st.session_state.lenteja_x = nueva_x
+        st.session_state.lenteja_y = nueva_y
+        st.session_state[f"ajuste_x_{identificador_video}"] = nueva_x
+        st.session_state[f"ajuste_y_{identificador_video}"] = nueva_y
 else:
     st.warning("Falta el componente de selección por clic. Usa temporalmente estos controles o instala las dependencias del proyecto.")
     st.image(vista_rgb, caption="Fotograma de selección", width=ancho_vista)
     st.session_state.lenteja_x = st.slider("Coordenada X", 0, max(0, ancho - 1), st.session_state.lenteja_x)
     st.session_state.lenteja_y = st.slider("Coordenada Y", 0, max(0, alto - 1), st.session_state.lenteja_y)
 
+with st.expander("Ajuste fino de la selección (opcional)"):
+    st.write("Corrige la posición si la pelotilla es pequeña o el clic quedó sobre el hilo.")
+    columna_x, columna_y = st.columns(2)
+    with columna_x:
+        x_ajustado = st.number_input(
+            "Coordenada X (px)",
+            min_value=0,
+            max_value=max(0, ancho - 1),
+            value=int(st.session_state.lenteja_x),
+            key=f"ajuste_x_{identificador_video}",
+        )
+    with columna_y:
+        y_ajustado = st.number_input(
+            "Coordenada Y (px)",
+            min_value=0,
+            max_value=max(0, alto - 1),
+            value=int(st.session_state.lenteja_y),
+            key=f"ajuste_y_{identificador_video}",
+        )
+    st.session_state.lenteja_x = int(x_ajustado)
+    st.session_state.lenteja_y = int(y_ajustado)
+
 x_inicial = st.session_state.lenteja_x
 y_inicial = st.session_state.lenteja_y
 st.info(f"Selección actual: X = {x_inicial} px, Y = {y_inicial} px")
 
 st.subheader("Procesamiento")
-if st.button("Seguir lenteja", type="primary"):
+if st.button("Seguir pelotilla", type="primary"):
     with tempfile.NamedTemporaryFile(delete=False, suffix="_gravilab_anotado.mp4") as archivo_salida:
         ruta_salida = Path(archivo_salida.name)
 
@@ -542,11 +616,13 @@ if st.button("Seguir lenteja", type="primary"):
     if porcentaje_detectado < 80:
         st.warning("La detección es baja. Prueba con mejor iluminación, más contraste o ajusta las coordenadas y la tolerancia de color.")
     else:
-        st.success("La lenteja fue seguida durante la mayor parte del video.")
+        st.success("La pelotilla fue seguida durante la mayor parte del video.")
 
     st.subheader("Video con trayectoria")
     if resultado.video_anotado.suffix.lower() == ".mp4":
-        st.video(resultado.video_anotado.read_bytes())
+        columna_video, _, _ = st.columns([2, 1, 1])
+        with columna_video:
+            st.video(resultado.video_anotado.read_bytes())
     else:
         st.info("El sistema generó el video en formato AVI porque no encontró un códec MP4 compatible.")
     st.download_button(

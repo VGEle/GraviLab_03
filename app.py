@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import csv
 import hashlib
 import io
 import math
@@ -12,6 +11,7 @@ from pathlib import Path
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import streamlit as st
 from PIL import Image
 
@@ -163,18 +163,17 @@ if mediciones:
         use_container_width=True,
         hide_index=True,
     )
-    salida_csv = io.StringIO()
-    escritor_csv = csv.DictWriter(
-        salida_csv,
-        fieldnames=["longitud_m", "tiempo_10_oscilaciones_s", "repeticion"],
+    salida_csv = pd.DataFrame(mediciones).to_csv(
+        index=False,
+        sep=";",
+        decimal=",",
     )
-    escritor_csv.writeheader()
-    escritor_csv.writerows(mediciones)
+    st.caption("El CSV usa punto y coma como separador y coma decimal para abrirlo correctamente en Excel.")
     st.download_button(
         "Descargar mediciones CSV",
-        data=salida_csv.getvalue().encode("utf-8"),
+        data=salida_csv.encode("utf-8-sig"),
         file_name="gravilab_mediciones.csv",
-        mime="text/csv",
+        mime="text/csv; charset=utf-8",
     )
     if st.button("Borrar todas las mediciones"):
         st.session_state.mediciones_registradas = []
@@ -657,9 +656,9 @@ if st.button("Seguir pelotilla", type="primary"):
         st.dataframe(datos, use_container_width=True, hide_index=True)
         st.download_button(
             "Descargar datos CSV",
-            data=datos.to_csv(index=False).encode("utf-8"),
+            data=datos.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
             file_name="gravilab_trayectoria.csv",
-            mime="text/csv",
+            mime="text/csv; charset=utf-8",
         )
     else:
         st.error("No hubo suficientes detecciones para construir la gráfica.")

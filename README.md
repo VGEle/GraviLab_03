@@ -60,7 +60,7 @@ En Windows, la activación del entorno virtual se realiza con:
 4. Para una misma longitud no se puede repetir el mismo número de repetición y se permiten como máximo 5 mediciones.
 5. Completa al menos 6 longitudes distintas con un mínimo de 3 y un máximo de 5 repeticiones por longitud. La aplicación muestra el progreso e indica cuándo la serie cumple el mínimo.
 6. Consulta las mediciones registradas en la tabla o pulsa **Borrar todas las mediciones** para empezar de nuevo. Los datos se mantienen durante la sesión actual de la aplicación.
-7. Pulsa **Descargar mediciones CSV** para exportar las columnas `longitud_m`, `tiempo_10_oscilaciones_s` y `repeticion`. Longitudes y tiempos se normalizan a metros y segundos.
+7. Pulsa **Descargar mediciones CSV** para exportar las columnas `longitud_m`, `tiempo_10_oscilaciones_s` y `repeticion`. Longitudes y tiempos se normalizan a metros y segundos. El archivo usa `;` como separador, coma decimal y codificación UTF-8 para abrirlo directamente en Excel en español.
 8. Cuando haya al menos 6 longitudes distintas y 3 repeticiones por longitud, consulta **Análisis físico** para ver el periodo promedio, la desviación estándar, T², la regresión, g y el error porcentual. El ajuste usa el periodo promedio de cada longitud y reporta la incertidumbre estándar de g propagada desde la incertidumbre estándar de la pendiente.
 9. Revisa las gráficas T² frente a L y T frente a L, las alertas de mediciones atípicas y las conclusiones automáticas. La gravedad de referencia inicia en 9,78 m/s², pero puede cambiarse desde la interfaz si el laboratorio define otro valor.
 
@@ -73,6 +73,10 @@ En Windows, la activación del entorno virtual se realiza con:
 5. Pulsa **Seguir pelotilla**.
 6. Revisa el porcentaje de fotogramas detectados y el periodo estimado automáticamente a partir de cruces ascendentes. Se muestra también la dispersión del periodo cuando hay suficientes ciclos.
 7. Descarga el video anotado o los datos de trayectoria. Si calibraste, el CSV incluye las posiciones relativas `x_m` y `y_m`.
+
+### Si Excel muestra todo en una sola columna
+
+Los archivos descargados usan punto y coma (`;`) como separador porque es el formato habitual de Excel con configuración regional en español. Si tienes un CSV antiguo separado por comas, abre Excel y selecciona **Datos → Desde texto/CSV**; luego elige `Coma` como delimitador y carga el archivo.
 
 ## Recomendaciones para grabar el video
 

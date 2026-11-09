@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import csv
+import io
+import math
 import tempfile
 from pathlib import Path
 
@@ -24,6 +27,135 @@ st.set_page_config(page_title="GraviLab - Seguimiento de video", layout="wide")
 
 st.title("GraviLab: seguimiento del péndulo")
 st.write("Carga un video y haz clic directamente sobre la lenteja para iniciar el seguimiento.")
+
+st.subheader("Registro de mediciones")
+st.write(
+    "Registra la longitud del péndulo y el tiempo de 10 oscilaciones para cada "
+    "repetición. Para completar la serie se requieren al menos 6 longitudes y "
+    "entre 3 y 5 repeticiones por longitud."
+)
+
+if "mediciones_registradas" not in st.session_state:
+    st.session_state.mediciones_registradas = []
+
+with st.form("form_registro_datos"):
+    columna_longitud, columna_tiempo, columna_repeticion = st.columns(3)
+    with columna_longitud:
+        longitud_ingresada = st.text_input("Longitud")
+        unidad_longitud = st.selectbox("Unidad de longitud", ["", "m", "cm", "mm"])
+    with columna_tiempo:
+        tiempo_ingresado = st.text_input("Tiempo de 10 oscilaciones")
+        unidad_tiempo = st.selectbox("Unidad de tiempo", ["", "s"])
+    with columna_repeticion:
+        repeticion_ingresada = st.text_input("Número de repetición")
+    guardar_medicion = st.form_submit_button("Agregar medición", type="primary")
+
+if guardar_medicion:
+    errores: list[str] = []
+    longitud_m: float | None = None
+    tiempo_s: float | None = None
+    repeticion: int | None = None
+
+    if not longitud_ingresada.strip():
+        errores.append("Ingresa la longitud.")
+    elif unidad_longitud not in {"m", "cm", "mm"}:
+        errores.append("Selecciona una unidad válida para la longitud.")
+    else:
+        try:
+            longitud_valor = float(longitud_ingresada.strip().replace(",", "."))
+            if not math.isfinite(longitud_valor) or longitud_valor <= 0:
+                errores.append("La longitud debe ser un número mayor que cero.")
+            else:
+                factor_longitud = {"m": 1.0, "cm": 0.01, "mm": 0.001}[unidad_longitud]
+                longitud_convertida = round(longitud_valor * factor_longitud, 9)
+                if longitud_convertida <= 0:
+                    errores.append("La longitud convertida a metros debe ser mayor que cero.")
+                else:
+                    longitud_m = longitud_convertida
+        except ValueError:
+            errores.append("La longitud debe ser un valor numérico válido.")
+
+    if not tiempo_ingresado.strip():
+        errores.append("Ingresa el tiempo de 10 oscilaciones.")
+    elif unidad_tiempo != "s":
+        errores.append("Selecciona la unidad de tiempo en segundos (s).")
+    else:
+        try:
+            tiempo_s = float(tiempo_ingresado.strip().replace(",", "."))
+            if not math.isfinite(tiempo_s) or tiempo_s <= 0:
+                errores.append("El tiempo debe ser un número mayor que cero.")
+        except ValueError:
+            errores.append("El tiempo debe ser un valor numérico válido.")
+
+    if not repeticion_ingresada.strip():
+        errores.append("Ingresa el número de repetición.")
+    else:
+        try:
+            repeticion = int(repeticion_ingresada.strip())
+            if not 1 <= repeticion <= 5:
+                errores.append("El número de repetición debe estar entre 1 y 5.")
+        except ValueError:
+            errores.append("El número de repetición debe ser un entero entre 1 y 5.")
+
+    if not errores and longitud_m is not None and tiempo_s is not None and repeticion is not None:
+        mediciones = st.session_state.mediciones_registradas
+        repeticiones_longitud = [
+            medicion for medicion in mediciones if medicion["longitud_m"] == longitud_m
+        ]
+        if any(medicion["repeticion"] == repeticion for medicion in repeticiones_longitud):
+            errores.append("Ese número de repetición ya existe para esta longitud.")
+        elif len(repeticiones_longitud) >= 5:
+            errores.append("Cada longitud admite un máximo de 5 repeticiones.")
+        else:
+            mediciones.append(
+                {
+                    "longitud_m": longitud_m,
+                    "tiempo_10_oscilaciones_s": tiempo_s,
+                    "repeticion": repeticion,
+                }
+            )
+            st.success("Medición agregada.")
+
+    for error in errores:
+        st.error(error)
+
+mediciones = st.session_state.mediciones_registradas
+if mediciones:
+    longitudes = sorted({medicion["longitud_m"] for medicion in mediciones})
+    longitudes_completas = sum(
+        sum(medicion["longitud_m"] == longitud for medicion in mediciones) >= 3
+        for longitud in longitudes
+    )
+    st.caption(
+        f"Longitudes registradas: {len(longitudes)} (mínimo 6) · "
+        f"Longitudes con al menos 3 repeticiones: {longitudes_completas}"
+    )
+    if len(longitudes) >= 6 and longitudes_completas == len(longitudes):
+        st.success("La serie cumple el mínimo de 6 longitudes y 3 repeticiones por longitud.")
+    else:
+        st.info("Continúa agregando mediciones hasta completar al menos 6 longitudes con 3 repeticiones cada una.")
+
+    st.dataframe(
+        sorted(mediciones, key=lambda medicion: (medicion["longitud_m"], medicion["repeticion"])),
+        use_container_width=True,
+        hide_index=True,
+    )
+    salida_csv = io.StringIO()
+    escritor_csv = csv.DictWriter(
+        salida_csv,
+        fieldnames=["longitud_m", "tiempo_10_oscilaciones_s", "repeticion"],
+    )
+    escritor_csv.writeheader()
+    escritor_csv.writerows(mediciones)
+    st.download_button(
+        "Descargar mediciones CSV",
+        data=salida_csv.getvalue().encode("utf-8"),
+        file_name="gravilab_mediciones.csv",
+        mime="text/csv",
+    )
+    if st.button("Borrar todas las mediciones"):
+        st.session_state.mediciones_registradas = []
+        st.rerun()
 
 video_cargado = st.file_uploader(
     "Carga un video del péndulo",

@@ -2,6 +2,12 @@
 
 GraviLab es una aplicación web para registrar mediciones y analizar videos de un péndulo simple.
 
+## Aplicación desplegada
+
+La versión disponible en línea se puede probar en:
+
+[https://gravilab03.streamlit.app](https://gravilab03.streamlit.app)
+
 Actualmente la aplicación:
 
 - Registra longitudes y tiempos de 10 oscilaciones con sus repeticiones, valida las entradas y exporta las mediciones a CSV.
@@ -46,9 +52,9 @@ En Windows, la activación del entorno virtual se realiza con:
 
 ## Uso
 
-### Registro de mediciones
+### Registro manual de mediciones
 
-1. En **Registro de mediciones**, ingresa la longitud y selecciona su unidad: metros (`m`), centímetros (`cm`) o milímetros (`mm`).
+1. En **Registro manual de mediciones**, ingresa la longitud desde el punto de suspensión hasta el centro de la pelotilla y selecciona su unidad: metros (`m`), centímetros (`cm`) o milímetros (`mm`).
 2. Ingresa el tiempo que tardan 10 oscilaciones, en segundos (`s`), y un número de repetición entero entre 1 y 5.
 3. Pulsa **Agregar medición**. Se aceptan comas o puntos como separador decimal. La longitud y el tiempo deben ser valores finitos mayores que cero; los campos y las unidades son obligatorios.
 4. Para una misma longitud no se puede repetir el mismo número de repetición y se permiten como máximo 5 mediciones.
@@ -81,12 +87,25 @@ En Windows, la activación del entorno virtual se realiza con:
 ## Archivos principales
 
 ```text
-app.py             Interfaz web de Streamlit.
-    analisis.py        Estadística de periodos, regresión lineal, cálculo de g y conclusiones.
-seguimiento.py     Detección de color y seguimiento de la lenteja.
-    test_analisis.py   Pruebas de análisis físico, datos atípicos, calibración y periodo automático.
-requirements.txt   Dependencias del proyecto.
+app.py            Interfaz web de Streamlit.
+analisis.py       Estadística de periodos, regresión lineal, cálculo de g y conclusiones.
+seguimiento.py    Detección de color y seguimiento de la pelotilla.
+test_analisis.py  Pruebas de análisis físico, datos atípicos, calibración y periodo automático.
+requirements.txt  Dependencias del proyecto.
 ```
+
+## Estado frente a los objetivos
+
+La aplicación implementa actualmente:
+
+- Registro de datos para al menos seis longitudes y entre tres y cinco repeticiones.
+- Cálculo del periodo, promedio, desviación estándar y regresión de T² frente a L.
+- Cálculo de g, incertidumbre propagada y error porcentual.
+- Gráficas T frente a L y T² frente a L con modelo teórico y barras de error.
+- Detección de mediciones atípicas y generación de conclusiones automáticas.
+- Seguimiento de la pelotilla en video, estimación automática del periodo y exportación de resultados.
+
+Para completar la validación experimental se deben ingresar los datos reales del laboratorio y comparar los resultados de GraviLab con una hoja de cálculo. Esa comparación, junto con el análisis de fuentes de error, debe incluirse en el informe final.
 
 ## Limitaciones actuales
 
@@ -96,4 +115,5 @@ requirements.txt   Dependencias del proyecto.
 - El criterio IQR marca valores para revisión, pero no los elimina automáticamente del análisis.
 - La detección automática del periodo usa cruces ascendentes del eje de mayor movimiento; requiere que el video incluya al menos una oscilación completa y que la pelotilla se detecte con continuidad.
 - El cálculo de g se basa en los tiempos registrados manualmente; no se extrae el periodo del video.
+- La comparación con una hoja de cálculo se realiza externamente y no se automatiza dentro de la aplicación.
 - Si el sistema no dispone de un códec MP4 compatible, el resultado puede generarse en formato AVI.

@@ -4,6 +4,7 @@ GraviLab es una aplicación web para analizar videos de un péndulo simple. Esta
 
 Actualmente la aplicación:
 
+- Registra longitudes y tiempos de 10 oscilaciones con sus repeticiones, valida las entradas y exporta las mediciones a CSV.
 - Carga videos del experimento.
 - Muestra el primer fotograma en tamaño reducido.
 - Permite seleccionar la lenteja haciendo clic sobre ella.
@@ -38,12 +39,14 @@ En Windows, la activación del entorno virtual se realiza con:
 
 ## Uso
 
-1. Carga el video en el botón **Carga un video del péndulo**.
-2. Haz clic sobre el centro de la lenteja en la imagen reducida.
-3. Ajusta el radio de muestra y la tolerancia de color si es necesario.
-4. Pulsa **Seguir lenteja**.
-5. Revisa el porcentaje de fotogramas detectados.
-6. Descarga el video anotado o el archivo CSV.
+1. En **Registro de mediciones**, ingresa la longitud con unidad, el tiempo de 10 oscilaciones en segundos y el número de repetición (1–5); luego pulsa **Agregar medición**.
+2. Registra al menos 6 longitudes diferentes y entre 3 y 5 repeticiones para cada una. Las longitudes se guardan en metros y los tiempos en segundos.
+3. Descarga el registro con **Descargar mediciones CSV** cuando lo necesites.
+4. Para el análisis de video, carga el archivo en **Carga un video del péndulo**.
+5. Haz clic sobre el centro de la lenteja en la imagen reducida.
+6. Ajusta el radio de muestra y la tolerancia de color si es necesario.
+7. Pulsa **Seguir lenteja**.
+8. Revisa el porcentaje de fotogramas detectados y descarga el video anotado o los datos de trayectoria.
 
 ## Recomendaciones para grabar el video
 
@@ -70,4 +73,3 @@ requirements.txt   Dependencias del proyecto.
 - Todavía no se detectan automáticamente los máximos de oscilación.
 - Todavía no se calcula el periodo, la incertidumbre ni la gravedad.
 - Si el sistema no dispone de un códec MP4 compatible, el resultado puede generarse en formato AVI.
-

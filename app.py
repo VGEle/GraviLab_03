@@ -35,12 +35,100 @@ except ImportError:
 
 st.set_page_config(page_title="GraviLab - Análisis del péndulo", layout="wide")
 
-st.title("GraviLab: análisis del péndulo")
-st.write(
-    "Puedes analizar el experimento de dos formas: registra manualmente los tiempos "
-    "para calcular g, o carga un video para seguir la pelotilla y estimar su periodo."
+st.markdown(
+    """
+    <style>
+    .block-container {
+        max-width: 1280px;
+        padding-top: 2.5rem;
+        padding-bottom: 3rem;
+    }
+    .gravi-hero {
+        background: linear-gradient(135deg, #102a43 0%, #176b87 100%);
+        border-radius: 22px;
+        padding: 2.1rem 2.4rem;
+        margin-bottom: 1.5rem;
+        color: #f7fbff;
+        box-shadow: 0 12px 32px rgba(7, 28, 45, 0.25);
+    }
+    .gravi-hero .eyebrow {
+        color: #9ee7dc;
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+    }
+    .gravi-hero h1 {
+        margin: 0.25rem 0 0.35rem 0;
+        font-size: clamp(2rem, 5vw, 3.5rem);
+        line-height: 1.05;
+    }
+    .gravi-hero p {
+        color: #d7f4f1;
+        font-size: 1.05rem;
+        margin: 0;
+        max-width: 800px;
+    }
+    .workflow-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+        margin: 1rem 0 2rem 0;
+    }
+    .workflow-card {
+        border: 1px solid rgba(120, 180, 195, 0.35);
+        border-radius: 16px;
+        padding: 1rem 1.15rem;
+        background: rgba(23, 107, 135, 0.10);
+    }
+    .workflow-card strong { color: #8fe3d7; }
+    .workflow-card span { color: #c6d5df; font-size: 0.92rem; }
+    .section-label {
+        color: #63d7c6;
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        margin-top: 1.7rem;
+        margin-bottom: -0.6rem;
+    }
+    div[data-testid="stForm"] {
+        border: 1px solid rgba(120, 180, 195, 0.28);
+        border-radius: 16px;
+        padding: 1rem 1.1rem 0.5rem 1.1rem;
+        background: rgba(255, 255, 255, 0.025);
+    }
+    div[data-testid="stMetric"] {
+        border: 1px solid rgba(120, 180, 195, 0.25);
+        border-radius: 14px;
+        padding: 0.8rem 1rem;
+        background: rgba(23, 107, 135, 0.08);
+    }
+    div.stButton > button[kind="primary"] {
+        background: linear-gradient(90deg, #159a9c, #176b87);
+        border: 0;
+        color: white;
+        font-weight: 700;
+    }
+    @media (max-width: 700px) {
+        .workflow-grid { grid-template-columns: 1fr; }
+        .gravi-hero { padding: 1.5rem; }
+    }
+    </style>
+    <div class="gravi-hero">
+        <div class="eyebrow">Laboratorio integrado · péndulo simple</div>
+        <h1>GraviLab</h1>
+        <p>Registra tus mediciones, analiza la gravedad y revisa el movimiento de la pelotilla en video.</p>
+    </div>
+    <div class="workflow-grid">
+        <div class="workflow-card"><strong>01 · Mediciones manuales</strong><br><span>Calcula T, T², g, incertidumbre, gráficas y conclusiones.</span></div>
+        <div class="workflow-card"><strong>02 · Análisis de video</strong><br><span>Sigue la pelotilla, estima su periodo y descarga la trayectoria.</span></div>
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
 
+st.markdown('<div class="section-label">01 · Datos del experimento</div>', unsafe_allow_html=True)
 st.subheader("Registro manual de mediciones")
 st.write(
     "Esta sección se usa para el análisis físico de la práctica. En cada fila se "
@@ -143,12 +231,18 @@ if guardar_medicion:
         st.error(error)
 
 mediciones = st.session_state.mediciones_registradas
+longitudes = sorted({medicion["longitud_m"] for medicion in mediciones})
+longitudes_completas = sum(
+    sum(medicion["longitud_m"] == longitud for medicion in mediciones) >= 3
+    for longitud in longitudes
+)
+serie_lista = len(longitudes) >= 6 and longitudes_completas == len(longitudes)
+metrica_longitudes, metrica_repeticiones, metrica_estado = st.columns(3)
+metrica_longitudes.metric("Longitudes", f"{min(len(longitudes), 6)}/6")
+metrica_repeticiones.metric("Series completas", str(longitudes_completas))
+metrica_estado.metric("Estado", "Listo para analizar" if serie_lista else "Datos en progreso")
+st.progress(min(len(longitudes) / 6, 1.0), text="Progreso del conjunto experimental")
 if mediciones:
-    longitudes = sorted({medicion["longitud_m"] for medicion in mediciones})
-    longitudes_completas = sum(
-        sum(medicion["longitud_m"] == longitud for medicion in mediciones) >= 3
-        for longitud in longitudes
-    )
     st.caption(
         f"Longitudes registradas: {len(longitudes)} (mínimo 6) · "
         f"Longitudes con al menos 3 repeticiones: {longitudes_completas}"
@@ -179,6 +273,7 @@ if mediciones:
         st.session_state.mediciones_registradas = []
         st.rerun()
 
+    st.markdown('<div class="section-label">01.2 · Resultados</div>', unsafe_allow_html=True)
     st.subheader("Análisis físico")
     if len(longitudes) < 6 or longitudes_completas != len(longitudes):
         st.info(
@@ -310,6 +405,13 @@ if mediciones:
         for conclusion in generar_conclusiones(resumen, parametros, datos_atipicos):
             st.markdown(f"- {conclusion}")
 
+st.divider()
+st.markdown('<div class="section-label">02 · Movimiento y video</div>', unsafe_allow_html=True)
+st.subheader("Análisis de video")
+st.write(
+    "Carga un video con cámara fija para seguir la pelotilla, estimar su periodo "
+    "y revisar la trayectoria. La calibración espacial es opcional."
+)
 video_cargado = st.file_uploader(
     "Carga un video del péndulo",
     type=["mp4", "mov", "avi", "m4v"],
@@ -354,6 +456,7 @@ escala = min(1.0, ancho_maximo / ancho)
 ancho_vista = max(1, int(ancho * escala))
 alto_vista = max(1, int(alto * escala))
 
+st.markdown('<div class="section-label">02.1 · Preparación</div>', unsafe_allow_html=True)
 st.subheader("Calibración espacial")
 with st.expander("Calibrar píxeles a metros con una regla o longitud conocida"):
     st.caption(
@@ -473,6 +576,7 @@ with st.expander("Calibrar píxeles a metros con una regla o longitud conocida")
         except ValueError as error:
             st.error(str(error))
 
+st.markdown('<div class="section-label">02.2 · Selección</div>', unsafe_allow_html=True)
 st.subheader("Selecciona la pelotilla")
 st.caption(
     "Haz clic una vez sobre el centro de la pelotilla, no sobre el hilo. "
@@ -662,3 +766,6 @@ if st.button("Seguir pelotilla", type="primary"):
         )
     else:
         st.error("No hubo suficientes detecciones para construir la gráfica.")
+
+st.divider()
+st.caption("GraviLab · Laboratorio Integrado · Análisis experimental del péndulo simple")

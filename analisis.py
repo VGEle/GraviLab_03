@@ -7,6 +7,8 @@ import math
 import numpy as np
 import pandas as pd
 
+GRAVEDAD_REFERENCIA_M_S2 = 9.78
+
 
 def calibrar_escala_m_por_pixel(
     punto_1: tuple[float, float],
@@ -115,8 +117,12 @@ def calcular_periodo_trayectoria(datos: pd.DataFrame) -> dict[str, float | int |
 
 def calcular_analisis(
     mediciones: list[dict[str, float | int]],
+    gravedad_referencia_m_s2: float = GRAVEDAD_REFERENCIA_M_S2,
 ) -> tuple[pd.DataFrame, dict[str, float]]:
     """Calcula estadísticas del periodo y el ajuste lineal de T² frente a L."""
+
+    if not math.isfinite(gravedad_referencia_m_s2) or gravedad_referencia_m_s2 <= 0:
+        raise ValueError("La gravedad de referencia debe ser un número mayor que cero.")
 
     datos = pd.DataFrame(mediciones)
     datos["periodo_s"] = datos["tiempo_10_oscilaciones_s"] / 10
@@ -158,6 +164,133 @@ def calcular_analisis(
         incertidumbre_gravedad = gravedad * error_estandar_pendiente / abs(pendiente)
         parametros["gravedad"] = gravedad
         parametros["incertidumbre_gravedad"] = incertidumbre_gravedad
-        parametros["error_porcentual"] = abs(gravedad - 9.81) / 9.81 * 100
+        parametros["gravedad_referencia"] = gravedad_referencia_m_s2
+        parametros["error_porcentual"] = (
+            abs(gravedad - gravedad_referencia_m_s2) / gravedad_referencia_m_s2 * 100
+        )
 
     return resumen, parametros
+
+
+def detectar_datos_atipicos(
+    mediciones: list[dict[str, float | int]],
+) -> pd.DataFrame:
+    """Marca periodos atípicos dentro de cada grupo de longitud usando el IQR.
+
+    Se trabaja con el periodo de cada repetición, no con los tiempos brutos de
+    diez oscilaciones. Para grupos pequeños con IQR cero se usa MAD; si todas
+    las mediciones coinciden, solo se tolera una diferencia numérica mínima.
+    """
+
+    columnas = [
+        "longitud_m",
+        "repeticion",
+        "periodo_s",
+        "limite_inferior_s",
+        "limite_superior_s",
+        "atipico",
+    ]
+    datos = pd.DataFrame(mediciones).copy()
+    if datos.empty:
+        return pd.DataFrame(columns=columnas)
+
+    datos["periodo_s"] = datos["tiempo_10_oscilaciones_s"] / 10
+    filas: list[dict[str, float | int | bool]] = []
+
+    for longitud, grupo in datos.groupby("longitud_m", sort=True):
+        valores = grupo["periodo_s"].to_numpy(dtype=float)
+        q1, q3 = np.percentile(valores, [25, 75])
+        iqr = q3 - q1
+
+        if iqr > 0:
+            limite_inferior = q1 - 1.5 * iqr
+            limite_superior = q3 + 1.5 * iqr
+        else:
+            mediana = float(np.median(valores))
+            mad = float(np.median(np.abs(valores - mediana)))
+            dispersion = 1.4826 * mad
+            if dispersion > 0:
+                limite_inferior = mediana - 3 * dispersion
+                limite_superior = mediana + 3 * dispersion
+            else:
+                tolerancia = max(abs(mediana) * 1e-9, 1e-9)
+                limite_inferior = mediana - tolerancia
+                limite_superior = mediana + tolerancia
+
+        for indice, fila in grupo.iterrows():
+            periodo = float(fila["periodo_s"])
+            filas.append(
+                {
+                    "longitud_m": float(longitud),
+                    "repeticion": int(fila["repeticion"]),
+                    "periodo_s": periodo,
+                    "limite_inferior_s": float(limite_inferior),
+                    "limite_superior_s": float(limite_superior),
+                    "atipico": bool(
+                        periodo < limite_inferior or periodo > limite_superior
+                    ),
+                }
+            )
+
+    return pd.DataFrame(filas, columns=columnas).sort_values(
+        ["longitud_m", "repeticion"]
+    )
+
+
+def generar_conclusiones(
+    resumen: pd.DataFrame,
+    parametros: dict[str, float],
+    datos_atipicos: pd.DataFrame | None = None,
+) -> list[str]:
+    """Genera conclusiones breves a partir del ajuste y la dispersión observada."""
+
+    if resumen.empty:
+        return ["No hay suficientes datos para generar conclusiones."]
+
+    conclusiones: list[str] = []
+    r_cuadrado = parametros.get("r_cuadrado", float("nan"))
+    if math.isfinite(r_cuadrado):
+        if r_cuadrado >= 0.95:
+            conclusiones.append(
+                f"La relación lineal entre T² y L es fuerte (R² = {r_cuadrado:.4f})."
+            )
+        elif r_cuadrado >= 0.80:
+            conclusiones.append(
+                f"La relación entre T² y L es moderada (R² = {r_cuadrado:.4f}); conviene revisar la dispersión."
+            )
+        else:
+            conclusiones.append(
+                f"La relación lineal entre T² y L es débil (R² = {r_cuadrado:.4f}); deben revisarse las mediciones."
+            )
+
+    gravedad = parametros.get("gravedad", float("nan"))
+    error_porcentual = parametros.get("error_porcentual", float("nan"))
+    referencia = parametros.get("gravedad_referencia", GRAVEDAD_REFERENCIA_M_S2)
+    if math.isfinite(gravedad) and math.isfinite(error_porcentual):
+        if error_porcentual <= 5:
+            conclusiones.append(
+                f"La gravedad experimental es {gravedad:.3f} m/s² y presenta un error de {error_porcentual:.2f}% frente a la referencia de {referencia:.2f} m/s²."
+            )
+        else:
+            conclusiones.append(
+                f"La gravedad experimental es {gravedad:.3f} m/s², con un error de {error_porcentual:.2f}%; conviene revisar el cronometraje, la longitud y el ángulo inicial."
+            )
+
+    intercepto = parametros.get("intercepto", float("nan"))
+    escala_t2 = float(resumen["periodo_cuadrado_s2"].mean())
+    if math.isfinite(intercepto) and escala_t2 > 0:
+        if abs(intercepto) <= 0.1 * escala_t2:
+            conclusiones.append("El intercepto es pequeño frente a T² promedio, consistente con el modelo ideal.")
+        else:
+            conclusiones.append("El intercepto no es despreciable; puede indicar errores sistemáticos o una longitud efectiva mal medida.")
+
+    if datos_atipicos is not None and not datos_atipicos.empty:
+        cantidad_atipicos = int(datos_atipicos["atipico"].sum())
+        if cantidad_atipicos:
+            conclusiones.append(
+                f"Se detectaron {cantidad_atipicos} medición(es) atípica(s); deben revisarse antes de sacar la conclusión final."
+            )
+        else:
+            conclusiones.append("No se detectaron mediciones atípicas mediante el criterio IQR por longitud.")
+
+    return conclusiones

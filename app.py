@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import math
 import tempfile
@@ -10,9 +11,15 @@ from pathlib import Path
 
 import cv2
 import matplotlib.pyplot as plt
+import numpy as np
 import streamlit as st
 from PIL import Image
 
+from analisis import (
+    calcular_analisis,
+    calcular_periodo_trayectoria,
+    calibrar_escala_m_por_pixel,
+)
 from seguimiento import procesar_video
 
 try:
@@ -157,6 +164,70 @@ if mediciones:
         st.session_state.mediciones_registradas = []
         st.rerun()
 
+    st.subheader("Análisis físico")
+    if len(longitudes) < 6 or longitudes_completas != len(longitudes):
+        st.info(
+            "Completa al menos 6 longitudes distintas y 3 repeticiones por longitud "
+            "para habilitar el análisis."
+        )
+    else:
+        resumen, parametros = calcular_analisis(mediciones)
+        st.caption(
+            "El periodo de cada repetición es el tiempo de 10 oscilaciones dividido entre 10. "
+            "Se ajusta T² promedio frente a la longitud; la incertidumbre reportada es "
+            "el error estándar de g propagado desde el error estándar de la pendiente. "
+            "El error porcentual usa g de referencia = 9,81 m/s²."
+        )
+        st.dataframe(
+            resumen.rename(
+                columns={
+                    "longitud_m": "Longitud (m)",
+                    "repeticiones": "Repeticiones",
+                    "periodo_promedio_s": "Periodo promedio T (s)",
+                    "desviacion_estandar_s": "Desviación estándar de T (s)",
+                    "periodo_cuadrado_s2": "T² promedio (s²)",
+                }
+            ).round(6),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        metrica_pendiente, metrica_intercepto, metrica_r2 = st.columns(3)
+        metrica_pendiente.metric("Pendiente", f'{parametros["pendiente"]:.6g} s²/m')
+        metrica_intercepto.metric("Intercepto", f'{parametros["intercepto"]:.6g} s²')
+        metrica_r2.metric("R²", f'{parametros["r_cuadrado"]:.6f}')
+
+        if "gravedad" in parametros:
+            metrica_gravedad, metrica_incertidumbre, metrica_error = st.columns(3)
+            metrica_gravedad.metric("g calculada", f'{parametros["gravedad"]:.4f} m/s²')
+            metrica_incertidumbre.metric(
+                "Incertidumbre estándar de g",
+                f'± {parametros["incertidumbre_gravedad"]:.4f} m/s²',
+            )
+            metrica_error.metric("Error porcentual", f'{parametros["error_porcentual"]:.2f}%')
+        else:
+            st.warning("La pendiente del ajuste no es positiva; no se puede calcular una g física.")
+
+        figura_analisis, eje_analisis = plt.subplots(figsize=(8, 4))
+        eje_analisis.scatter(
+            resumen["longitud_m"],
+            resumen["periodo_cuadrado_s2"],
+            color="#1769aa",
+            label="Datos experimentales",
+        )
+        longitudes_ajuste = np.linspace(resumen["longitud_m"].min(), resumen["longitud_m"].max(), 100)
+        eje_analisis.plot(
+            longitudes_ajuste,
+            parametros["pendiente"] * longitudes_ajuste + parametros["intercepto"],
+            color="#d1495b",
+            label="Regresión lineal",
+        )
+        eje_analisis.set_xlabel("Longitud L (m)")
+        eje_analisis.set_ylabel("Periodo al cuadrado T² (s²)")
+        eje_analisis.grid(alpha=0.25)
+        eje_analisis.legend()
+        st.pyplot(figura_analisis, clear_figure=True)
+
 video_cargado = st.file_uploader(
     "Carga un video del péndulo",
     type=["mp4", "mov", "avi", "m4v"],
@@ -182,8 +253,17 @@ if not ok:
     st.error("No se pudo leer el video. Prueba con un archivo MP4 o MOV válido.")
     st.stop()
 
+huella_video = hashlib.sha256(video_cargado.getbuffer()).hexdigest()
+identificador_video = f"{video_cargado.name}:{huella_video}"
+if st.session_state.get("identificador_video") != identificador_video:
+    st.session_state.identificador_video = identificador_video
+    st.session_state.pop("punto_calibracion_1", None)
+    st.session_state.pop("punto_calibracion_2", None)
+    st.session_state.pop("clic_calibracion", None)
+    st.session_state.lenteja_x = ancho // 2
+    st.session_state.lenteja_y = alto // 2
+
 st.caption(f"Resolución: {ancho} × {alto} px · FPS detectados: {fps:.2f}")
-st.subheader("Selecciona la lenteja")
 
 # La imagen se reduce para que no ocupe toda la página. Las coordenadas del
 # clic se convierten de nuevo a la resolución original del video.
@@ -192,10 +272,107 @@ escala = min(1.0, ancho_maximo / ancho)
 ancho_vista = max(1, int(ancho * escala))
 alto_vista = max(1, int(alto * escala))
 
-if "lenteja_x" not in st.session_state:
-    st.session_state.lenteja_x = ancho // 2
-if "lenteja_y" not in st.session_state:
-    st.session_state.lenteja_y = alto // 2
+st.subheader("Calibración espacial")
+with st.expander("Calibrar píxeles a metros con una regla o longitud conocida"):
+    st.caption(
+        "Selecciona los dos extremos de una distancia visible en el mismo plano del péndulo "
+        "e ingresa su longitud real. La calibración supone que la cámara es perpendicular al plano."
+    )
+    if COMPONENTE_CLIC:
+        vista_calibracion = cv2.resize(
+            primer_frame, (ancho_vista, alto_vista), interpolation=cv2.INTER_AREA
+        )
+        for numero, color in ((1, (0, 255, 0)), (2, (255, 0, 0))):
+            punto = st.session_state.get(f"punto_calibracion_{numero}")
+            if punto is not None:
+                cv2.drawMarker(
+                    vista_calibracion,
+                    (int(punto[0] * escala), int(punto[1] * escala)),
+                    color,
+                    cv2.MARKER_CROSS,
+                    24,
+                    2,
+                )
+        vista_calibracion_rgb = cv2.cvtColor(vista_calibracion, cv2.COLOR_BGR2RGB)
+        clic_calibracion = streamlit_image_coordinates(
+            Image.fromarray(vista_calibracion_rgb),
+            key=f"selector_calibracion_{identificador_video}",
+        )
+        if clic_calibracion is not None:
+            st.session_state.clic_calibracion = (
+                min(ancho - 1, max(0, round(clic_calibracion["x"] / escala))),
+                min(alto - 1, max(0, round(clic_calibracion["y"] / escala))),
+            )
+        st.caption(
+            f"Punto seleccionado: {st.session_state.get('clic_calibracion', 'haz clic en un extremo')}"
+        )
+    else:
+        st.image(
+            cv2.cvtColor(primer_frame, cv2.COLOR_BGR2RGB),
+            caption="Fotograma para seleccionar los puntos de referencia",
+            width=ancho_vista,
+        )
+        columnas_punto_1 = st.columns(2)
+        coordenada_x_1 = columnas_punto_1[0].number_input(
+            "X del extremo 1 (px)", min_value=0, max_value=ancho - 1, value=0
+        )
+        coordenada_y_1 = columnas_punto_1[1].number_input(
+            "Y del extremo 1 (px)", min_value=0, max_value=alto - 1, value=0
+        )
+        columnas_punto_2 = st.columns(2)
+        coordenada_x_2 = columnas_punto_2[0].number_input(
+            "X del extremo 2 (px)", min_value=0, max_value=ancho - 1, value=min(100, ancho - 1)
+        )
+        coordenada_y_2 = columnas_punto_2[1].number_input(
+            "Y del extremo 2 (px)", min_value=0, max_value=alto - 1, value=0
+        )
+        st.session_state.punto_calibracion_1 = (coordenada_x_1, coordenada_y_1)
+        st.session_state.punto_calibracion_2 = (coordenada_x_2, coordenada_y_2)
+
+    if COMPONENTE_CLIC:
+        columna_extremo_1, columna_extremo_2, columna_reiniciar = st.columns(3)
+        if columna_extremo_1.button("Guardar extremo 1", key="guardar_extremo_1"):
+            if "clic_calibracion" in st.session_state:
+                st.session_state.punto_calibracion_1 = st.session_state.clic_calibracion
+            else:
+                st.error("Haz clic en el primer extremo de la referencia.")
+        if columna_extremo_2.button("Guardar extremo 2", key="guardar_extremo_2"):
+            if "clic_calibracion" in st.session_state:
+                st.session_state.punto_calibracion_2 = st.session_state.clic_calibracion
+            else:
+                st.error("Haz clic en el segundo extremo de la referencia.")
+        if columna_reiniciar.button("Reiniciar puntos", key="reiniciar_calibracion"):
+            st.session_state.pop("punto_calibracion_1", None)
+            st.session_state.pop("punto_calibracion_2", None)
+
+    columna_longitud_real, columna_unidad_real = st.columns(2)
+    with columna_longitud_real:
+        longitud_referencia_ingresada = st.text_input(
+            "Longitud real entre los extremos", value="1.0", key="longitud_referencia"
+        )
+    with columna_unidad_real:
+        unidad_referencia = st.selectbox(
+            "Unidad de referencia", ["m", "cm", "mm"], key="unidad_referencia"
+        )
+
+    escala_m_por_px: float | None = None
+    try:
+        longitud_referencia = float(longitud_referencia_ingresada.strip().replace(",", "."))
+        factor_unidad = {"m": 1.0, "cm": 0.01, "mm": 0.001}[unidad_referencia]
+        longitud_referencia_m = longitud_referencia * factor_unidad
+        if not math.isfinite(longitud_referencia_m) or longitud_referencia_m <= 0:
+            raise ValueError("La longitud de referencia debe ser mayor que cero.")
+        if "punto_calibracion_1" in st.session_state and "punto_calibracion_2" in st.session_state:
+            escala_m_por_px = calibrar_escala_m_por_pixel(
+                st.session_state.punto_calibracion_1,
+                st.session_state.punto_calibracion_2,
+                longitud_referencia_m,
+            )
+            st.success(f"Escala: {escala_m_por_px:.6g} m/px")
+    except ValueError as error:
+        st.error(str(error))
+
+st.subheader("Selecciona la lenteja")
 
 radio_muestra = st.slider("Radio de muestra (px)", 4, 50, 12)
 tolerancia_tono = st.slider("Tolerancia de color", 5, 45, 18)
@@ -209,7 +386,10 @@ vista_rgb = cv2.cvtColor(vista_seleccion, cv2.COLOR_BGR2RGB)
 
 if COMPONENTE_CLIC:
     st.caption("Haz clic sobre el centro de la lenteja. La cruz amarilla muestra la selección actual.")
-    clic = streamlit_image_coordinates(Image.fromarray(vista_rgb), key="selector_lenteja")
+    clic = streamlit_image_coordinates(
+        Image.fromarray(vista_rgb),
+        key=f"selector_lenteja_{identificador_video}",
+    )
     if clic is not None:
         st.session_state.lenteja_x = min(ancho - 1, max(0, round(clic["x"] / escala)))
         st.session_state.lenteja_y = min(alto - 1, max(0, round(clic["y"] / escala)))
@@ -246,10 +426,48 @@ if st.button("Seguir lenteja", type="primary"):
     porcentaje_detectado = 100 * datos["detectado"].mean()
     datos_validos = datos[datos["detectado"]].copy()
 
+    try:
+        periodo_trayectoria = calcular_periodo_trayectoria(datos)
+    except ValueError as error:
+        periodo_trayectoria = None
+        st.warning(f"No se pudo estimar el periodo automáticamente: {error}")
+
     metrica_1, metrica_2, metrica_3 = st.columns(3)
     metrica_1.metric("Fotogramas", f"{len(datos):,}")
     metrica_2.metric("FPS", f"{resultado.fps:.2f}")
     metrica_3.metric("Detección válida", f"{porcentaje_detectado:.1f}%")
+
+    if periodo_trayectoria is not None:
+        metricas_periodo = st.columns(3)
+        metricas_periodo[0].metric(
+            "Periodo automático",
+            f'{periodo_trayectoria["periodo_s"]:.4f} s',
+        )
+        metricas_periodo[1].metric(
+            "Incertidumbre estándar del periodo",
+            (
+                f'± {periodo_trayectoria["incertidumbre_s"]:.4f} s'
+                if math.isfinite(float(periodo_trayectoria["incertidumbre_s"]))
+                else "No disponible"
+            ),
+        )
+        metricas_periodo[2].metric(
+            "Oscilaciones detectadas",
+            f'{periodo_trayectoria["oscilaciones"]} '
+            f'({periodo_trayectoria["cruces"]} cruces)',
+        )
+        st.caption(
+            f"Periodo estimado entre cruces ascendentes de la posición de equilibrio "
+            f"en el eje {periodo_trayectoria['eje'].upper()}."
+        )
+
+    if escala_m_por_px is not None and len(datos_validos) > 0:
+        for eje_posicion in ("x", "y"):
+            origen = float(datos_validos[f"{eje_posicion}_px"].iloc[0])
+            datos[f"{eje_posicion}_m"] = (
+                datos[f"{eje_posicion}_px"] - origen
+            ) * escala_m_por_px
+        datos_validos = datos[datos["detectado"]].copy()
 
     if porcentaje_detectado < 80:
         st.warning("La detección es baja. Prueba con mejor iluminación, más contraste o ajusta las coordenadas y la tolerancia de color.")
@@ -269,11 +487,23 @@ if st.button("Seguir lenteja", type="primary"):
     )
 
     if len(datos_validos) >= 2:
-        st.subheader("Posición horizontal frente al tiempo")
+        eje_trayectoria = (
+            str(periodo_trayectoria["eje"])
+            if periodo_trayectoria is not None
+            else ("x" if datos_validos["x_px"].std() >= datos_validos["y_px"].std() else "y")
+        )
+        columna_posicion = f"{eje_trayectoria}_m" if escala_m_por_px is not None else f"{eje_trayectoria}_px"
+        unidad_posicion = "m" if escala_m_por_px is not None else "px"
+        st.subheader("Posición de la pelotilla frente al tiempo")
         figura, eje = plt.subplots(figsize=(10, 4))
-        eje.plot(datos_validos["tiempo_s"], datos_validos["x_px"], color="#1769aa", linewidth=1.5)
+        eje.plot(
+            datos_validos["tiempo_s"],
+            datos_validos[columna_posicion],
+            color="#1769aa",
+            linewidth=1.5,
+        )
         eje.set_xlabel("Tiempo (s)")
-        eje.set_ylabel("Posición horizontal (px)")
+        eje.set_ylabel(f"Posición {eje_trayectoria.upper()} ({unidad_posicion})")
         eje.grid(alpha=0.25)
         st.pyplot(figura, clear_figure=True)
 

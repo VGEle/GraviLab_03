@@ -1,16 +1,20 @@
 # GraviLab
 
-GraviLab es una aplicación web para analizar videos de un péndulo simple. Esta primera versión valida el seguimiento automático de la lenteja antes de incorporar el cálculo del periodo y de la aceleración de la gravedad.
+GraviLab es una aplicación web para registrar mediciones y analizar videos de un péndulo simple.
 
 Actualmente la aplicación:
 
 - Registra longitudes y tiempos de 10 oscilaciones con sus repeticiones, valida las entradas y exporta las mediciones a CSV.
+- Calcula el periodo por repetición, su promedio y desviación estándar por longitud, y ajusta una regresión lineal de T² frente a L.
+- Calcula la gravedad, su incertidumbre propagada desde el error estándar de la pendiente y el error porcentual respecto a 9,81 m/s².
 - Carga videos del experimento.
 - Muestra el primer fotograma en tamaño reducido.
 - Permite seleccionar la lenteja haciendo clic sobre ella.
-- Sigue la lenteja usando su color y su posición anterior.
+- Sigue la lenteja usando su color y una predicción de posición entre fotogramas, rechazando saltos improbables.
 - Dibuja la trayectoria sobre el video.
-- Genera una gráfica de posición horizontal contra tiempo.
+- Estima automáticamente el periodo mediante cruces ascendentes de la posición de equilibrio.
+- Calibra píxeles a metros con dos puntos de una regla o una longitud conocida.
+- Genera una gráfica de posición contra tiempo en píxeles o metros calibrados.
 - Permite descargar el video anotado y los datos en formato CSV.
 
 ## Requisitos
@@ -48,14 +52,17 @@ En Windows, la activación del entorno virtual se realiza con:
 5. Completa al menos 6 longitudes distintas con un mínimo de 3 y un máximo de 5 repeticiones por longitud. La aplicación muestra el progreso e indica cuándo la serie cumple el mínimo.
 6. Consulta las mediciones registradas en la tabla o pulsa **Borrar todas las mediciones** para empezar de nuevo. Los datos se mantienen durante la sesión actual de la aplicación.
 7. Pulsa **Descargar mediciones CSV** para exportar las columnas `longitud_m`, `tiempo_10_oscilaciones_s` y `repeticion`. Longitudes y tiempos se normalizan a metros y segundos.
+8. Cuando haya al menos 6 longitudes distintas y 3 repeticiones por longitud, consulta **Análisis físico** para ver el periodo promedio, la desviación estándar, T², la regresión, g y el error porcentual. El ajuste usa el periodo promedio de cada longitud y reporta la incertidumbre estándar de g propagada desde la incertidumbre estándar de la pendiente.
 
 ### Análisis de video
 
 1. Carga el video en **Carga un video del péndulo**.
-2. Haz clic sobre el centro de la lenteja en la imagen reducida.
-3. Ajusta el radio de muestra y la tolerancia de color si es necesario.
-4. Pulsa **Seguir lenteja**.
-5. Revisa el porcentaje de fotogramas detectados y descarga el video anotado o los datos de trayectoria.
+2. Opcionalmente, abre **Calibración espacial**. Haz clic en cada extremo de una regla o referencia visible, guarda cada punto e ingresa la distancia real y su unidad.
+3. Haz clic sobre el centro de la lenteja en la imagen reducida.
+4. Ajusta el radio de muestra y la tolerancia de color si es necesario.
+5. Pulsa **Seguir lenteja**.
+6. Revisa el porcentaje de fotogramas detectados y el periodo estimado automáticamente a partir de cruces ascendentes. Se muestra también la dispersión del periodo cuando hay suficientes ciclos.
+7. Descarga el video anotado o los datos de trayectoria. Si calibraste, el CSV incluye las posiciones relativas `x_m` y `y_m`.
 
 ## Recomendaciones para grabar el video
 
@@ -64,13 +71,16 @@ En Windows, la activación del entorno virtual se realiza con:
 - Utiliza un fondo uniforme y una lenteja de color contrastante.
 - Evita sombras, reflejos y objetos con colores similares.
 - Graba al menos 10 oscilaciones, preferiblemente a 30 FPS o más.
-- Incluye una regla o marcador de escala para una futura calibración de píxeles a metros.
+- Incluye una regla o marcador de longitud conocida en el mismo plano de movimiento para calibrar píxeles a metros.
+- Asegúrate de que la cámara esté perpendicular al plano de movimiento; la calibración es una escala 2D simple y no corrige perspectiva.
 
 ## Archivos principales
 
 ```text
 app.py             Interfaz web de Streamlit.
+analisis.py        Estadística de periodos, regresión lineal y cálculo de g.
 seguimiento.py     Detección de color y seguimiento de la lenteja.
+test_analisis.py   Pruebas de calibración, periodo automático y perfil de color.
 requirements.txt   Dependencias del proyecto.
 ```
 
@@ -78,7 +88,7 @@ requirements.txt   Dependencias del proyecto.
 
 - La lenteja debe tener suficiente contraste con el fondo.
 - La selección inicial se realiza manualmente.
-- La posición se expresa en píxeles, no en metros.
-- Todavía no se detectan automáticamente los máximos de oscilación.
-- Todavía no se calcula el periodo, la incertidumbre ni la gravedad.
+- La calibración espacial es opcional, requiere dos puntos visibles de una distancia conocida y no corrige distorsión ni perspectiva.
+- La detección automática del periodo usa cruces ascendentes del eje de mayor movimiento; requiere que el video incluya al menos una oscilación completa y que la pelotilla se detecte con continuidad.
+- El cálculo de g se basa en los tiempos registrados manualmente; no se extrae el periodo del video.
 - Si el sistema no dispone de un códec MP4 compatible, el resultado puede generarse en formato AVI.

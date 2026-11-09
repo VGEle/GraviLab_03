@@ -1,8 +1,7 @@
-"""Seguimiento sencillo de una lenteja de péndulo por color y proximidad.
+"""Seguimiento de la lenteja de un péndulo por color y continuidad espacial.
 
 Esta primera versión está pensada para videos con cámara fija y una lenteja
-que contraste claramente con el fondo. No intenta detectar todavía la
-longitud ni calcular la gravedad.
+que contraste claramente con el fondo.
 """
 
 from __future__ import annotations
@@ -41,16 +40,28 @@ def _perfil_color(frame_bgr: np.ndarray, x: int, y: int, radio: int) -> tuple[in
     x1, x2 = max(0, x - radio), min(ancho, x + radio + 1)
     y1, y2 = max(0, y - radio), min(alto, y + radio + 1)
     muestra = hsv[y1:y2, x1:x2].reshape(-1, 3)
-    mediana = np.median(muestra, axis=0).astype(int)
-    return int(mediana[0]), int(mediana[1]), int(mediana[2])
+    colores_validos = muestra[(muestra[:, 1] >= 40) & (muestra[:, 2] >= 30)]
+    if len(colores_validos) == 0:
+        raise ValueError(
+            "La muestra no contiene píxeles con color suficiente. Selecciona el centro "
+            "de la pelotilla y prueba con mejor iluminación."
+        )
+
+    angulos = colores_validos[:, 0] * np.pi / 90
+    tono = np.arctan2(np.mean(np.sin(angulos)), np.mean(np.cos(angulos)))
+    tono = int(round((tono * 90 / np.pi) % 180))
+    saturacion = int(np.median(colores_validos[:, 1]))
+    valor = int(np.median(colores_validos[:, 2]))
+    return tono, saturacion, valor
 
 
 def _centroide_mascara(
     mask: np.ndarray,
-    posicion_anterior: tuple[float, float] | None,
+    posicion_predicha: tuple[float, float] | None,
     area_minima: int,
+    distancia_maxima_px: float,
 ) -> tuple[float, float] | None:
-    """Selecciona el contorno más plausible y devuelve su centroide."""
+    """Selecciona el contorno más cercano a la posición esperada."""
 
     contornos, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     candidatos = []
@@ -71,14 +82,17 @@ def _centroide_mascara(
     if not candidatos:
         return None
 
-    if posicion_anterior is None:
+    if posicion_predicha is None:
         candidato = max(candidatos, key=lambda item: item[2])
     else:
         candidato = min(
             candidatos,
-            key=lambda item: (item[0] - posicion_anterior[0]) ** 2
-            + (item[1] - posicion_anterior[1]) ** 2,
+            key=lambda item: (item[0] - posicion_predicha[0]) ** 2
+            + (item[1] - posicion_predicha[1]) ** 2,
         )
+        distancia = np.hypot(candidato[0] - posicion_predicha[0], candidato[1] - posicion_predicha[1])
+        if distancia > distancia_maxima_px:
+            return None
 
     return float(candidato[0]), float(candidato[1])
 
@@ -146,7 +160,11 @@ def procesar_video(
         captura.release()
         raise ValueError("No se pudo leer el primer fotograma del video.")
 
-    tono, saturacion, valor = _perfil_color(primer_frame, x_inicial, y_inicial, radio_muestra)
+    try:
+        tono, saturacion, valor = _perfil_color(primer_frame, x_inicial, y_inicial, radio_muestra)
+    except ValueError:
+        captura.release()
+        raise
     # La detección usa el tono seleccionado y exige una saturación/iluminación
     # mínima para evitar que el fondo gris se convierta en candidato.
     saturacion_minima = max(saturacion_minima, int(saturacion * 0.45))
@@ -159,9 +177,13 @@ def procesar_video(
         raise
 
     filas: list[dict[str, float | int | bool]] = []
-    posicion_anterior: tuple[float, float] | None = None
+    posiciones_recientes: list[tuple[float, float]] = []
+    fotogramas_sin_deteccion = 0
     trayectoria: list[tuple[int, int]] = []
     numero_fotograma = 0
+    diagonal = float(np.hypot(ancho, alto))
+    distancia_maxima_px = max(35.0, min(diagonal * 0.35, diagonal * 4 / fps))
+    kernel = np.ones((5, 5), np.uint8)
 
     # Procesamos de nuevo desde el primer fotograma.
     captura.set(cv2.CAP_PROP_POS_FRAMES, 0)
@@ -179,18 +201,39 @@ def procesar_video(
             & (hsv[:, :, 2] >= valor_minimo)
         ).astype(np.uint8) * 255
 
-        kernel = np.ones((5, 5), np.uint8)
         mascara = cv2.morphologyEx(mascara, cv2.MORPH_OPEN, kernel)
         mascara = cv2.morphologyEx(mascara, cv2.MORPH_CLOSE, kernel)
 
-        posicion = _centroide_mascara(mascara, posicion_anterior, area_minima)
+        posicion_predicha = None
+        if posiciones_recientes:
+            posicion_predicha = posiciones_recientes[-1]
+            if len(posiciones_recientes) == 2 and fotogramas_sin_deteccion == 0:
+                anterior, reciente = posiciones_recientes
+                posicion_predicha = (
+                    reciente[0] + reciente[0] - anterior[0],
+                    reciente[1] + reciente[1] - anterior[1],
+                )
+        posicion = _centroide_mascara(
+            mascara,
+            posicion_predicha,
+            area_minima,
+            distancia_maxima_px,
+        )
         tiempo = numero_fotograma / fps
 
         if posicion is None:
             filas.append({"fotograma": numero_fotograma, "tiempo_s": tiempo, "x_px": np.nan, "y_px": np.nan, "detectado": False})
+            fotogramas_sin_deteccion += 1
+            if fotogramas_sin_deteccion >= 5:
+                posiciones_recientes.clear()
         else:
             x, y = posicion
-            posicion_anterior = posicion
+            if fotogramas_sin_deteccion:
+                posiciones_recientes = [posicion]
+            else:
+                posiciones_recientes.append(posicion)
+                posiciones_recientes = posiciones_recientes[-2:]
+            fotogramas_sin_deteccion = 0
             trayectoria.append((int(round(x)), int(round(y))))
             filas.append({"fotograma": numero_fotograma, "tiempo_s": tiempo, "x_px": x, "y_px": y, "detectado": True})
 

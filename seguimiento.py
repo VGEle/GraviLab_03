@@ -1,6 +1,6 @@
-"""Seguimiento de la lenteja de un péndulo por color y continuidad espacial.
+"""Seguimiento de la pelotilla de un péndulo por color y continuidad espacial.
 
-Esta primera versión está pensada para videos con cámara fija y una lenteja
+Esta primera versión está pensada para videos con cámara fija y una pelotilla
 que contraste claramente con el fondo.
 """
 
@@ -141,7 +141,7 @@ def procesar_video(
     valor_minimo: int = 40,
     area_minima: int = 20,
 ) -> ResultadoSeguimiento:
-    """Rastrea la lenteja y genera un video con la trayectoria dibujada."""
+    """Rastrea la pelotilla y genera un video con la trayectoria dibujada."""
 
     captura = cv2.VideoCapture(str(video_entrada))
     if not captura.isOpened():
@@ -180,6 +180,7 @@ def procesar_video(
     posiciones_recientes: list[tuple[float, float]] = []
     fotogramas_sin_deteccion = 0
     trayectoria: list[tuple[int, int]] = []
+    trayectoria_overlay = np.zeros_like(primer_frame)
     numero_fotograma = 0
     diagonal = float(np.hypot(ancho, alto))
     distancia_maxima_px = max(35.0, min(diagonal * 0.35, diagonal * 4 / fps))
@@ -234,11 +235,15 @@ def procesar_video(
                 posiciones_recientes.append(posicion)
                 posiciones_recientes = posiciones_recientes[-2:]
             fotogramas_sin_deteccion = 0
-            trayectoria.append((int(round(x)), int(round(y))))
+            punto_actual = (int(round(x)), int(round(y)))
+            if trayectoria:
+                cv2.line(trayectoria_overlay, trayectoria[-1], punto_actual, (255, 120, 0), 2)
+            trayectoria.append(punto_actual)
             filas.append({"fotograma": numero_fotograma, "tiempo_s": tiempo, "x_px": x, "y_px": y, "detectado": True})
 
-        for punto_a, punto_b in zip(trayectoria[:-1], trayectoria[1:]):
-            cv2.line(frame, punto_a, punto_b, (255, 120, 0), 2)
+        # Conservamos la trayectoria en una capa aparte para no volver a
+        # dibujar todos los segmentos en cada fotograma.
+        frame = cv2.addWeighted(frame, 1.0, trayectoria_overlay, 1.0, 0)
 
         if posicion is not None:
             cv2.circle(frame, (int(posicion[0]), int(posicion[1])), 10, (0, 255, 0), 2)

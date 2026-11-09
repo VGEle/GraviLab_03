@@ -39,14 +39,23 @@ En Windows, la activación del entorno virtual se realiza con:
 
 ## Uso
 
-1. En **Registro de mediciones**, ingresa la longitud con unidad, el tiempo de 10 oscilaciones en segundos y el número de repetición (1–5); luego pulsa **Agregar medición**.
-2. Registra al menos 6 longitudes diferentes y entre 3 y 5 repeticiones para cada una. Las longitudes se guardan en metros y los tiempos en segundos.
-3. Descarga el registro con **Descargar mediciones CSV** cuando lo necesites.
-4. Para el análisis de video, carga el archivo en **Carga un video del péndulo**.
-5. Haz clic sobre el centro de la lenteja en la imagen reducida.
-6. Ajusta el radio de muestra y la tolerancia de color si es necesario.
-7. Pulsa **Seguir lenteja**.
-8. Revisa el porcentaje de fotogramas detectados y descarga el video anotado o los datos de trayectoria.
+### Registro de mediciones
+
+1. En **Registro de mediciones**, ingresa la longitud y selecciona su unidad: metros (`m`), centímetros (`cm`) o milímetros (`mm`).
+2. Ingresa el tiempo que tardan 10 oscilaciones, en segundos (`s`), y un número de repetición entero entre 1 y 5.
+3. Pulsa **Agregar medición**. Se aceptan comas o puntos como separador decimal. La longitud y el tiempo deben ser valores finitos mayores que cero; los campos y las unidades son obligatorios.
+4. Para una misma longitud no se puede repetir el mismo número de repetición y se permiten como máximo 5 mediciones.
+5. Completa al menos 6 longitudes distintas con un mínimo de 3 y un máximo de 5 repeticiones por longitud. La aplicación muestra el progreso e indica cuándo la serie cumple el mínimo.
+6. Consulta las mediciones registradas en la tabla o pulsa **Borrar todas las mediciones** para empezar de nuevo. Los datos se mantienen durante la sesión actual de la aplicación.
+7. Pulsa **Descargar mediciones CSV** para exportar las columnas `longitud_m`, `tiempo_10_oscilaciones_s` y `repeticion`. Longitudes y tiempos se normalizan a metros y segundos.
+
+### Análisis de video
+
+1. Carga el video en **Carga un video del péndulo**.
+2. Haz clic sobre el centro de la lenteja en la imagen reducida.
+3. Ajusta el radio de muestra y la tolerancia de color si es necesario.
+4. Pulsa **Seguir lenteja**.
+5. Revisa el porcentaje de fotogramas detectados y descarga el video anotado o los datos de trayectoria.
 
 ## Recomendaciones para grabar el video
 
